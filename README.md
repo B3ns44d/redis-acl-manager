@@ -58,9 +58,7 @@ Create a JSON configuration file with the following structure:
       "channel2"
     ]
   },
-  "REDIS_AGENT_NODE_0": "server001.hostname.com",
-  "REDIS_AGENT_NODE_1": "server002.hostname.com",
-  "REDIS_AGENT_NODE_2": "server003.hostname.com"
+  "REDIS_NODES": "server001.hostname.com,server002.hostname.com,server003.hostname.com"
 }
 ```
 

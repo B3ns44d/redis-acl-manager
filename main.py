@@ -2,7 +2,7 @@ import argparse
 import json
 import logging
 import sys
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 import redis.sentinel
 from pydantic import BaseModel, ValidationError, field_validator
@@ -25,6 +25,7 @@ class RedisConfig(BaseModel):
     REDIS_ADMIN_USER: str
     USERNAME: str
     ACL_SETTINGS: ACLConfig
+    REDIS_NODES: List[str]
 
     @field_validator('REDIS_PORT')
     def port_must_be_valid(cls, v):
@@ -139,6 +140,20 @@ class RedisACLManager:
         return user_acl
 
 
+def load_config(config_path: str) -> RedisConfig:
+    try:
+        with open(config_path, 'r') as f:
+            config_data: dict[str, Any] = json.load(f)
+        if 'REDIS_NODES' in config_data:
+            config_data['REDIS_NODES'] = config_data['REDIS_NODES'].split(',')
+        else:
+            raise ValueError("REDIS_NODES key is missing in the configuration file.")
+        return RedisConfig(**config_data)
+    except FileNotFoundError:
+        logging.error(f"Configuration file {config_path} not found.")
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description='Manage ACL user for Redis instance')
     parser.add_argument('--config', help='Path to the configuration file', required=True)
@@ -152,8 +167,7 @@ def main():
     logging.basicConfig(level=args.log_level, format='%(asctime)s - %(levelname)s - %(message)s')
 
     try:
-        config_data = json.loads(args.config)
-        config = RedisConfig(**config_data)
+        config = load_config(args.config)
 
         redis_port = config.REDIS_PORT
         master_name = config.REDIS_MASTER
@@ -161,8 +175,7 @@ def main():
         admin_username = config.REDIS_ADMIN_USER
         username = config.USERNAME
         acl_settings = config.ACL_SETTINGS.model_dump()
-        sentinel_nodes = [(f'{config_data[f"REDIS_AGENT_NODE_{i}"]}', redis_port) for i in range(3)]
-
+        sentinel_nodes = [(node, redis_port) for node in config.REDIS_NODES]
         acl_manager = RedisACLManager(sentinel_port=redis_port, master_name=master_name, admin_password=admin_password,
                                       admin_username=admin_username, username=username, acl_config=acl_settings,
                                       sentinel_hosts=sentinel_nodes)
